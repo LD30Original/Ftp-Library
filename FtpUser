@@ -1,0 +1,165 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.IO;
+using System.Net;
+
+namespace FtpLibrary
+{
+    public class FtpUser
+    {
+        private string _userName;
+        private string _password;
+        private string _serverAdress;
+        private string _savePath;
+        private FtpItem _serverObject;
+        private FtpWebRequest _ftpWebRequest;
+        private FtpWebResponse _ftpWebResponse;
+        private ServicePoint _servicePoint;
+        private string _errorMessage;
+        private bool _verified = false;
+        public event Action<TransferProgress> TaskEvent;
+
+        private bool Verified { get { return _verified; } set { _verified = value; } }
+        public string UserName { get { return _userName; } set { _userName = value; } }
+        public string Password { get { return _password; } set { _password = value; } }
+        public string SavePath { get { return _savePath; } set { _savePath = value; } }
+        public bool IsVerified { get { return _verified; } }
+        public string ServerAdress { get { return _serverAdress; } set { _serverAdress = value; } }
+        public string ErrorMessage { get { return _errorMessage; } set { _errorMessage = value; } }
+        public FtpItem ServerObject { get { return _serverObject; } set { _serverObject = value; } }
+        public FtpWebRequest Request { get { return _ftpWebRequest; } set { _ftpWebRequest = value; } }
+        public FtpWebResponse Response { get { return _ftpWebResponse; } set { _ftpWebResponse = value; } }
+
+        public bool VerifyUser()
+        {
+            if (CreateRequest() && CreateResponse())
+            {
+                _verified = true;
+                _serverObject = new FtpFolder("root", _serverAdress, null);
+                DownloadSelected(ServerObject);
+                return _verified;
+            }
+            else
+            {
+                return _verified;
+            }
+        }
+
+        private bool CreateRequest(int Connections = 1)
+        {
+            if (!CreateUri())
+            {
+                return false;
+            }
+            else
+            {
+                Request.Credentials = new NetworkCredential(UserName, Password);
+                Request.Proxy = null;
+                Request.UseBinary = true;
+                Request.EnableSsl = true;
+
+                _servicePoint = Request.ServicePoint;
+                _servicePoint.ConnectionLimit = Connections;
+                ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+                Request.Method = WebRequestMethods.Ftp.PrintWorkingDirectory;
+
+                return true;
+            }
+
+
+        }
+
+        private bool CreateResponse()
+        {
+            try
+            {
+                Response = (FtpWebResponse)Request.GetResponse();
+                return true;
+            }
+            catch (WebException e)
+            {
+                ErrorMessage = $"CreateResponse: { e.Message}";
+                return false;
+            }
+        }
+
+        private bool CreateUri()
+        {
+            try
+            {
+                _ftpWebRequest = (FtpWebRequest)WebRequest.Create(new Uri(ServerAdress));
+            }
+            catch (UriFormatException e)
+            {
+                ErrorMessage = e.Message;
+                return false;
+            }
+            return true;
+        }
+
+        public void PreviousFolder()
+        {
+            if (ServerObject != null)
+            {
+                ServerObject = ServerObject.PreviousItem;
+            }
+
+        }
+
+        public bool ChangeFolder(string folder)
+        {
+            if (ServerObject != null && IsFolder(ServerObject.List[folder]))
+            {
+                ServerObject = ServerObject.List[folder];
+
+
+                if (ServerObject.List.Count == 0)
+                {
+                    DownloadSelected(ServerObject);
+                }
+                else
+                {
+                    TransferProgress progress = new TransferProgress(0, 0);
+                    progress.Complete = true;
+                    FtpItem_TaskEvent(progress);
+                }
+                return true;
+            }
+
+            return false;
+        }
+
+        public void DownloadFile(string file)
+        {
+            DownloadSelected(ServerObject.List[file]);
+        }
+
+        private void DownloadSelected(FtpItem item)
+        {
+            if (IsVerified)
+            {
+                item.DownloadProgress += FtpItem_TaskEvent;
+                Task t = new Task(() => item.Download(UserName, Password, SavePath));
+                t.Start();
+                // Task t = Task.Factory.StartNew( () => item.Download(UserName, Password));
+            }
+        }
+
+        private bool IsFolder(FtpItem item)
+        {
+            return item.FileSize == 0;
+        }
+
+        private void FtpItem_TaskEvent(TransferProgress progress)
+        {
+            var update = TaskEvent;
+            if (update != null)
+            {
+                update(progress);
+            }
+        }
+    }
+}
