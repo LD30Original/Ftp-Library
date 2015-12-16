@@ -144,7 +144,7 @@ namespace FtpLibrary
                 item.DownloadProgress += FtpItem_TaskEvent;
                 Task t = new Task(() => item.Download(UserName, Password, SavePath));
                 t.Start();
-                // Task t = Task.Factory.StartNew( () => item.Download(UserName, Password));
+            
             }
         }
 
