@@ -1,0 +1,22 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace FtpLibrary
+{
+    public interface FtpItem
+    {
+
+        string Name { get; }
+        string Path { get; }
+        int FileSize { get; }
+        SortedList<string, FtpItem> List { get; }
+        void Download(string s, string t, string p);
+        FtpItem PreviousItem { get; }
+        int Count { get; }
+        event Action<TransferProgress> DownloadProgress;
+       
+    }
+}
