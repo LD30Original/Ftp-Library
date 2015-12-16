@@ -26,7 +26,7 @@ namespace FtpLibrary
         public int FileSize { get { return _fileSize; } set { _fileSize = value; } }
         public bool Complete {  get { return _completed; } set { _completed = value; } }
         public int Count {  get { return _count; } set { _count++; } }
-        public int PercentDone { get { return (int)((((float)_totalTransfered) / ((float)_fileSize)) * 100); } }
+        public int PercentDone { get { return (int)((((float)TotalTransfered) / ((float)FileSize)) * 100); } }
         public string Message {  get { return _message; } set { _message = value; } }
         public int Seconds()
         {
