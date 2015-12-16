@@ -1,0 +1,163 @@
+using System;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using FtpLibrary;
+using System.Diagnostics;
+using System.Collections.Generic;
+using System.IO;
+
+namespace WindowsFormsApplication2
+{
+    public partial class Form1 : Form
+    {
+        private FtpUser currentUser;
+
+        public Form1()
+        {
+            InitializeComponent();
+
+            ftpfileList.MouseDoubleClick += FtpfileList_MouseDoubleClick;
+            SavePath.Text = $"C:/ Users /{ Environment.UserName}/ Ftp";
+
+            if (!Directory.Exists($"C:/Users/{Environment.UserName}/Ftp"))
+            {
+                Directory.CreateDirectory($"C:/Users/{Environment.UserName}/Ftp");
+            }
+
+        }
+
+        private void FtpfileList_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            try
+            {
+                UiListChange(ftpfileList.GetItemText(ftpfileList.SelectedItem).Substring(0, ftpfileList.GetItemText(ftpfileList.SelectedItem).IndexOf(" , Size: ")));
+            }
+            catch (System.ArgumentOutOfRangeException ex)
+            {
+                debugList.Items.Add(ex.Message);
+            }
+
+        }
+
+        private void UiListChange(string _currentFtpItem)
+        {
+            if (_currentFtpItem == " /cd ..")
+            {
+                currentUser.PreviousFolder();
+                PrintDirectory(currentUser.ServerObject);
+            }
+            else if (currentUser.ChangeFolder(_currentFtpItem))
+            {
+              
+            }
+            else // Time to download a file
+            {
+                currentUser.DownloadFile(_currentFtpItem);
+            }
+        }
+
+        private void Connect_Click(object sender, EventArgs e) // init a session
+        {
+            if (Connect.Text == "Connect")
+            {
+
+                currentUser = new FtpUser();
+                currentUser.UserName = UserName.Text;
+                currentUser.Password = Password.Text;
+                currentUser.ServerAdress = $"ftp://{Adress.Text}/";
+                currentUser.SavePath = $"C:/Users/{Environment.UserName}/Ftp/";
+                currentUser.TaskEvent += FtpItem_ProgressChanged;
+
+                if (currentUser.VerifyUser())
+                {
+                    Connect.Text = "Refresh";
+                }
+                else
+                {
+                    Connect.Text = "Connect";
+                    MessageBox.Show(currentUser.ErrorMessage);
+                }
+            }
+        }
+
+        private void PrintDirectory(FtpItem item)
+        {
+
+            ftpfileList.Items.Clear();
+
+            debugList.Items.Clear();
+
+
+            foreach (var t in item.List)
+            {
+                ftpfileList.Items.Add(t.Value.Name + " , Size: " + t.Value.FileSize + " Byte");
+            }
+        }
+
+        private void FtpItem_ProgressChanged(TransferProgress progress)
+        {
+            if (progress.FileSize == 0)
+            {
+                if (progress.Complete == true)
+                {
+                    if (ftpfileList.InvokeRequired)
+                    {
+                        ftpfileList.Invoke(new Action<TransferProgress>(FtpItem_ProgressChanged), new object[] { progress });
+                    }
+                    else
+                    {
+                        PrintDirectory(currentUser.ServerObject);
+                        debugList.Items.Add($"Operation took: {progress.EllapsedTime} MilliSeconds");
+                        if (progress.Message != null)
+                        {
+                            debugList.Items.Add(progress.Message);
+                        }
+                    }
+                }
+            }
+
+            else
+            {
+                if (progressBar1.InvokeRequired)
+                {
+                    progressBar1.Invoke(new Action<TransferProgress>(FtpItem_ProgressChanged), new Object[] { progress });
+                }
+                else
+                {
+                    if (progress.TotalTransfered != 0)
+                    {
+                        SpeedLabel.Text = $"{progress.PercentDone} % Complete, Speed: {progress.TransferSpeed()}\n Time Left: {progress.Minutes()} Minutes & {progress.Seconds()} seconds";
+                        progressBar1.Value = progress.PercentDone;
+                        debugList.Items.Add(progress.Message);
+                    }
+                    if (progressBar1.Value == 100)
+                    {
+                        progressBar1.Value = 0;
+                        debugList.Items.Clear();
+                        SpeedLabel.Text = "Download Complete";
+                    }
+                }
+
+            }
+        }
+
+        private void OpenFtpFolder_Click(object sender, EventArgs e)
+        {
+            if (!Directory.Exists($"C:/Users/{Environment.UserName}/Ftp"))
+            {
+                Directory.CreateDirectory($"C:/Users/{Environment.UserName}/Ftp");
+            }
+            System.Diagnostics.Process.Start($"C:/Users/{Environment.UserName}/Ftp");
+        }
+
+        private void CancelDownload_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void ProgressLabel_Click(object sender, EventArgs e)
+        {
+
+        }
+    }
+}
