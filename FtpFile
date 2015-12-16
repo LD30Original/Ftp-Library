@@ -1,0 +1,105 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.IO;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+using System.Diagnostics;
+
+
+namespace FtpLibrary
+{
+    public class FtpFile : FtpItem
+    {
+        private string _fileName;
+        private int _fileSize;
+        private string _filePath;
+        private static int _fileAmount = 0;
+        public event Action<TransferProgress> DownloadProgress;
+
+        public FtpFile(string filename, string filesize, string filepath)
+        {
+            _fileName = filename;
+            _fileSize = Int32.Parse(filesize);
+            _filePath = filepath;
+            _fileAmount += 1;
+        }
+        public string Name { get { return _fileName; } }
+        public string Path { get { return _filePath; } }
+        public int FileSize { get { return _fileSize; } }
+        public SortedList<string, FtpItem> List { get { return null; } }
+        public void Download(string _username, string _password, string _savePath = null)
+        {
+            FtpWebRequest request = (FtpWebRequest)WebRequest.Create(new Uri(this.Path));
+            request.Credentials = new NetworkCredential(_username, _password);
+            request.Proxy = null;
+            request.UseBinary = true;
+            request.EnableSsl = true;
+
+            ServicePoint sp;
+            sp = request.ServicePoint;
+            sp.ConnectionLimit = 1;
+            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+            request.Method = WebRequestMethods.Ftp.DownloadFile;
+
+            FileStream newFile;
+
+            FileInfo file = new FileInfo($"{_savePath}{this.Name}");
+
+                if (File.Exists($"{_savePath}{this.Name}"))
+                {
+                    request.ContentOffset = file.Length;
+                    newFile = new FileStream($"{_savePath}{this.Name}", FileMode.Append, FileAccess.Write);
+                }
+
+                else
+                {
+               
+                newFile = new FileStream($"{_savePath}{this.Name}", FileMode.Create, FileAccess.Write);
+            }
+
+            using (FtpWebResponse response = (FtpWebResponse)request.GetResponse())
+            using (Stream downloadStream = response.GetResponseStream())
+            using (newFile)
+            {
+                byte[] buffer = new byte[128 * 1024];
+                int read;
+
+                var ellapsedTime = Stopwatch.StartNew();
+                TransferProgress progress = new TransferProgress(0, (int)newFile.Length);
+                progress.FileSize = FileSize;
+
+                while ((read = downloadStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    newFile.Write(buffer, 0, read);
+
+                    progress.EllapsedTime = (int)ellapsedTime.ElapsedMilliseconds;
+                    progress.TotalTransfered = (int)newFile.Length;
+                    progress.Message = $"The FileSize is: {FileSize} and The name is: {Name}";
+
+                    OnDownloadProgress(progress);
+
+                }
+
+                ellapsedTime.Stop();
+                newFile.Close();
+                downloadStream.Close();
+                response.Close();
+            }
+        }
+
+        public FtpItem PreviousItem { get { return this; } }
+        public int Count { get { return _fileAmount; } }
+
+       private void OnDownloadProgress(TransferProgress progress)
+        {
+            var update = DownloadProgress;
+            if(update != null)
+            {
+                update(progress);
+            }
+        }
+        ~FtpFile() { _fileAmount--; }
+
+    }
+}
