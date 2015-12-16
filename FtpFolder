@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+using System.IO;
+using System.Diagnostics;
+
+namespace FtpLibrary
+{
+    public class FtpFolder : FtpItem
+    {
+        private static int _folderAmount = 0;
+        private string _folderName;
+        private string _folderPath;
+        private FtpItem _parent;
+        private SortedList<string, FtpItem> _folderList;
+        public event Action<TransferProgress> DownloadProgress;
+
+        public FtpFolder(string foldername, string folderpath, FtpItem parent)
+        {
+            _folderName = foldername;
+            _folderPath = folderpath;
+            _parent = parent;
+            _folderList = new SortedList<string, FtpItem>();
+            _folderAmount += 1;
+        }
+
+        public string Name { get { return _folderName; } }
+        public string Path { get { return _folderPath; } }
+        public SortedList<string, FtpItem> List { get { return _folderList; } }
+        public int FileSize { get { return 0; } }
+        public FtpItem PreviousItem { get { return _parent; } }
+        public void Download(string _username, string _password, string _savePath)
+        {
+            var ellapsedTime = Stopwatch.StartNew();
+
+            FtpWebRequest request = (FtpWebRequest)WebRequest.Create(new Uri(this.Path));
+           
+
+            request.Credentials = new NetworkCredential(_username, _password);
+            request.Proxy = null;
+            request.UseBinary = true;
+            request.EnableSsl = true;
+
+            ServicePoint sp;
+            sp = request.ServicePoint;
+            sp.ConnectionLimit = 1;
+            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+
+
+                request.Method = WebRequestMethods.Ftp.ListDirectoryDetails;
+                FtpWebResponse response = (FtpWebResponse)request.GetResponse();
+
+                using (Stream responseStream = response.GetResponseStream())
+                using (StreamReader reader = new StreamReader(responseStream))
+
+                {
+                    SortedList<string, FtpItem> updateList = new SortedList<string, FtpItem>();
+
+                    FtpFolder tempFolder = new FtpFolder(" /cd ..", Path, this);
+
+                    updateList.Add(tempFolder.Name, tempFolder);
+
+                    while (!reader.EndOfStream)
+                    {
+                        string ListDetails = reader.ReadLine();
+                        var listarray = ListDetails.Split(new char[] { ' ' }, 9, StringSplitOptions.RemoveEmptyEntries);
+
+                        if (listarray.ElementAt(4) == "0")
+                        {
+                            tempFolder = new FtpFolder(listarray.ElementAt(8), Path + listarray.ElementAt(8) + '/', this);
+                            updateList.Add(tempFolder.Name, tempFolder);
+                        }
+                        else
+                        {
+                            FtpFile tempFile = new FtpFile(listarray.ElementAt(8), listarray.ElementAt(4), Path + listarray.ElementAt(8));
+                            updateList.Add(tempFile.Name, tempFile);
+                        }
+                    }
+                    responseStream.Close();
+                    response.Close();
+                    reader.Close();
+                    ellapsedTime.Stop();
+                    RefreshList(updateList);
+
+                
+                TransferProgress progress = new TransferProgress(0, 0);
+                progress.FileSize = FileSize;
+                progress.Complete = true;
+                progress.EllapsedTime = (int)ellapsedTime.ElapsedMilliseconds;
+                progress.Message = $"The FileSize is: {FileSize} and The name is: {Name}";
+               
+                OnDownloadProgress(progress);
+            }
+        }
+
+        private void RefreshList(SortedList<string, FtpItem> updateList)
+        {
+
+            if (_folderList.Count == 0)
+            {
+                _folderList = updateList;
+            }
+            else
+            {
+
+                SortedList<string, FtpItem> removeList = new SortedList<string, FtpItem>();
+
+                foreach (var i in _folderList)
+                {
+                    if (!updateList.ContainsKey(i.Key))
+                    {
+                        removeList.Add(i.Key, i.Value);
+                    }
+                }
+
+                foreach (var i in removeList) // removes deleted items
+                {
+                    _folderList.Remove(i.Key);
+                }
+
+                foreach (var i in updateList)
+                {
+                    if (!_folderList.ContainsKey(i.Key)) // check if any items have been added to the server
+                    {
+                        _folderList.Add(i.Key, i.Value);
+                    }
+                }
+
+            }
+        }
+
+        private void OnDownloadProgress(TransferProgress progress)
+        {
+            var update = DownloadProgress;
+            if (update != null)
+            {
+                update(progress);
+            }
+        }
+        public int Count { get { return _folderAmount; } }
+
+
+        ~FtpFolder() { _folderAmount--; }
+    }
+}
