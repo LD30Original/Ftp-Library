@@ -1,0 +1,53 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace FtpLibrary
+{
+   public class TransferProgress
+    {
+        
+        private int _ellapsedTime;
+        private int _totalTransfered;
+        private int _fileSize;
+        private static int _count = 0;
+        private bool _completed = false;
+        private string _message;
+        public TransferProgress(int ellapsedTime, int totalTransferred)
+        {
+            _ellapsedTime = ellapsedTime;
+            _totalTransfered = totalTransferred;
+            _count++;
+        }
+        public int EllapsedTime {  get { return _ellapsedTime; } set { _ellapsedTime = value; } }
+        public int TotalTransfered { get { return _totalTransfered; } set { _totalTransfered = value; } }
+        public int FileSize { get { return _fileSize; } set { _fileSize = value; } }
+        public bool Complete {  get { return _completed; } set { _completed = value; } }
+        public int Count {  get { return _count; } set { _count++; } }
+        public int PercentDone { get { return (int)((((float)_totalTransfered) / ((float)_fileSize)) * 100); } }
+        public string Message {  get { return _message; } set { _message = value; } }
+        public int Seconds()
+        {
+            return (((FileSize - TotalTransfered) / (TotalTransfered / EllapsedTime)) / 1000) % 60;
+        }
+        public int Minutes()
+        {
+            return (((FileSize - TotalTransfered) / (TotalTransfered / EllapsedTime)) / 1000) / 60;
+        }
+        public string TransferSpeed()
+        {
+            if ((TotalTransfered / EllapsedTime) <= 1000)
+            {
+                return $"{TotalTransfered / EllapsedTime} kb/s ";
+            }
+            else
+            {
+                return $"{ (TotalTransfered / EllapsedTime) / 1000} + Mb/s ";
+            }
+        }
+        
+            
+    }
+}
